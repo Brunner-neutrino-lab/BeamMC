@@ -255,7 +255,8 @@ if __name__ == "__main__":
     plots = {}
     data = {}
     # Make directories
-    os.mkdir('plots')
+    if not os.path.isdir('plots'):
+        os.mkdir('plots')
     
     # Main function
     for i in range(PDEs):
