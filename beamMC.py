@@ -39,6 +39,15 @@ def MCuni(n):
     data['hitx'] = X
     data['hity'] = Y    
 
+# Create an array of photons with a uniform beam profile
+def MClinear(n):
+    X=[];Y=[]
+    for i in range(n):
+        X.append(random.triangular(-dx/2,dx/2,dx/2))
+        Y.append(random.triangular(-dy/2,dy/2,dy/2))
+    data['hitx'] = X
+    data['hity'] = Y  
+
 # Define the bounds for the indexed SPAD
 def cell(i,ds):
     x1=i*pitch-ds/2
@@ -258,6 +267,8 @@ def main(pde,p,n):
             MCslit(n)
         if SIM == 'uni':
             MCuni(n)
+        if SIM == 'linear':
+            MClinear(n)
         # Plot the beam
         plotflux(s,n)  
         # Determine how many photons hit each SPAD
@@ -287,7 +298,7 @@ if __name__ == "__main__":
     Nmin = 0;Nmax = 4
     num = Nmax-Nmin+1 
     N = np.logspace(Nmin,Nmax,num)
-    N = [1000,2000,4000,8000,10000,20000,40000]#[1,2,4,8,10,20,40,80,100,200,400,800,[1000,2000,4000,8000,10000,20000,40000,80000,100000]
+    N = [1,2,4,8,10,20,40,80,100,200,400,800,1000,2000,4000,8000,10000,20000,40000,80000,100000]
     # What is the beam radius (Gaussian beam), (x,y)
     w1=1;w2=w1 #mm
     # SiPM/SPAD parameters
@@ -300,7 +311,8 @@ if __name__ == "__main__":
     # What simulation are we running?
     #SIM = 'gauss'
     #SIM = 'slit'
-    SIM = 'uni'
+    #SIM = 'uni'
+    SIM = 'linear'
     
     # SPAD array
     xi=round(dx/pitch)
