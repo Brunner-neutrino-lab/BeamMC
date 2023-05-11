@@ -287,7 +287,7 @@ if __name__ == "__main__":
     Nmin = 0;Nmax = 4
     num = Nmax-Nmin+1 
     N = np.logspace(Nmin,Nmax,num)
-    N = [80000,100000]#[1,2,4,8,10,20,40,80,100,200,400,800,1000,2000,4000,8000,10000,20000,40000,80000,100000]
+    N = [1000,2000,4000,8000,10000,20000,40000]#[1,2,4,8,10,20,40,80,100,200,400,800,[1000,2000,4000,8000,10000,20000,40000,80000,100000]
     # What is the beam radius (Gaussian beam), (x,y)
     w1=1;w2=w1 #mm
     # SiPM/SPAD parameters
@@ -299,8 +299,8 @@ if __name__ == "__main__":
     dy = 5.85
     # What simulation are we running?
     #SIM = 'gauss'
-    SIM = 'slit'
-    #SIM = 'uni'
+    #SIM = 'slit'
+    SIM = 'uni'
     
     # SPAD array
     xi=round(dx/pitch)
