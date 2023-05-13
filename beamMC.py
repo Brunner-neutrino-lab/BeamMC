@@ -43,8 +43,8 @@ def MCuni(n):
 def MClinear(n):
     X=[];Y=[]
     for i in range(n):
-        X.append(random.triangular(-dx/2,dx/2,dx/2))
-        Y.append(random.triangular(-dy/2,dy/2,dy/2))
+        X.append(random.triangular(-dx/2,dx/2,-dx/2))
+        Y.append(random.triangular(-dy/2,dy/2,-dy/2))
     data['hitx'] = X
     data['hity'] = Y  
 
@@ -101,10 +101,11 @@ def MCSiPM(pde):
     # Compare the physical coordinates against the beam radius
     # Determine the SPAD indicies within each box of radius i*w0/2
     rx=[];ry=[]
-    if w1 < dx and w2 < dy:
-        for i in range(1,5):
-            rx.append([np.where(x<-w1*i/2)[0][-1],np.where(x<w1*i/2)[0][-1]])
-            ry.append([np.where(y<-w2*i/2)[0][-1],np.where(y<w2*i/2)[0][-1]])
+    if SIM == 'gauss' or SIM == 'agauss' or SIM == 'slit':     
+        if w1 < dx and w2 < dy:
+            for i in range(1,5):
+                rx.append([np.where(x<-w1*i/2)[0][-1],np.where(x<w1*i/2)[0][-1]])
+                ry.append([np.where(y<-w2*i/2)[0][-1],np.where(y<w2*i/2)[0][-1]])
     rx.append([0,xi]);ry.append([0,yi])
     # Array for tracking which SPAD has been checked
     data['sipm'] = np.ones([xi,yi])
@@ -308,7 +309,7 @@ if __name__ == "__main__":
     # SiPM width/height
     dx = 5.95
     dy = 5.85
-    # What simulation are we running?
+    # What simulation is running?
     #SIM = 'gauss'
     #SIM = 'slit'
     #SIM = 'uni'
