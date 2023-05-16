@@ -264,6 +264,8 @@ def main(pde,p,n):
         # MC beam
         if SIM == 'gauss':
             MCbeam(n)
+        if SIM == 'ellipse':
+            MCbeam(n)
         if SIM == 'slit':
             MCslit(n)
         if SIM == 'uni':
@@ -301,7 +303,7 @@ if __name__ == "__main__":
     N = np.logspace(Nmin,Nmax,num)
     N = [1,2,4,8,10,20,40,80,100,200,400,800,1000,2000,4000,8000,10000,20000,40000,80000,100000]
     # What is the beam radius (Gaussian beam), (x,y)
-    w1=1;w2=w1 #mm
+    w1=1;w2=w1/2 #mm
     # SiPM/SPAD parameters
     PDE = [0.25]
     PDEs = len(PDE)
@@ -311,9 +313,10 @@ if __name__ == "__main__":
     dy = 5.85
     # What simulation is running?
     #SIM = 'gauss'
+    SIM = 'ellipse'
     #SIM = 'slit'
     #SIM = 'uni'
-    SIM = 'linear'
+    #SIM = 'linear'
     
     # SPAD array
     xi=round(dx/pitch)
