@@ -1,95 +1,57 @@
 import numpy as np
-import multiprocessing
 import matplotlib.pyplot as plt
+import csv
+import multiprocessing
+import time
 
 def simulate_laser_pulse(n_photons, lambda_rate, wx, wy, t_reset, pitch, xlim, ylim, pde, t_dist, spatial_dist):
     """
-    Simulates a laser pulse as a 3D object (x, y, t) and determines pileup conditions.
-
-    Parameters:
-        n_photons (int): Number of photons to simulate.
-        t_dist (callable): Function to generate photon arrival times (e.g., np.random.uniform or np.random.normal).
-        spatial_dist (callable): Function to generate (x, y) positions of photons (e.g., 2D Gaussian or uniform distribution).
-        t_reset (float): Time reset threshold for pileup condition.
-
-    Returns:
-        photons (list): List of tuples [(x, y, t), ...] representing all photon arrivals.
-        pileup (list): List of tuples [(x, y, t), ...] where pileup condition is true.
-        no_pileup (list): List of tuples [(x, y, t), ...] where pileup condition is false.
+    Optimized simulation of a laser pulse, identifying pileup conditions.
     """
-    # Generate photon arrival times using the temporal distribution
+    # Generate photon arrival times and apply PDE
     t_arrivals = t_dist(size=n_photons, lambda_rate=lambda_rate)
+    detected_mask = np.random.uniform(size=n_photons) < pde
+    t_triggers = t_arrivals[detected_mask]
 
-    # Generate spatial coordinates for each photon
-    x_positions, y_positions = spatial_dist(size=n_photons, std_dev_x=wx / 4, std_dev_y=wy / 4)
+    # Generate spatial coordinates for detected photons
+    x_positions, y_positions = spatial_dist(size=len(t_triggers), std_dev_x=wx / 4, std_dev_y=wy / 4)
 
-    # Combine into a single list of (x, y, t)
-    photons = list(zip(x_positions, y_positions, t_arrivals))
+    # Combine data into a single array
+    photons = np.column_stack((x_positions, y_positions, t_triggers))
 
-    pileup = []
-    no_pileup = []
+    # Sort photons by time
+    photons = photons[np.argsort(photons[:, 2])]
 
-    # Create lattice for spatial cells
-    x_bins = np.arange(-xlim / 2, xlim / 2 + pitch, pitch)
-    y_bins = np.arange(-ylim / 2, ylim / 2 + pitch, pitch)
+    # Assign photons to spatial grid cells
+    x_grid = np.floor((photons[:, 0] + xlim / 2) / pitch).astype(int)
+    y_grid = np.floor((photons[:, 1] + ylim / 2) / pitch).astype(int)
+    grid_indices = x_grid * (int(xlim / pitch) + 1) + y_grid
 
-    def find_cell(x, y):
-        """Find the lattice cell indices for a given (x, y) coordinate."""
-        x_idx = np.digitize(x, x_bins) - 1
-        y_idx = np.digitize(y, y_bins) - 1
-        return x_idx, y_idx
+    # Initialize pileup and no_pileup masks
+    is_pileup = np.zeros(len(photons), dtype=bool)
 
-    # Check for pileup conditions
-    looping = True
-    i = 1
-    skip = []
-    while looping:
-
-        # Skip if already marked as pileup
-        if i in skip:
-            i += 1
-            if i == len(photons) - 1:
-                looping = False
-            else:
-                continue
-
-        # Check the PDE
-        if np.random.uniform() > pde:
-            i += 1
-            if i == len(photons) - 1:
-                looping = False
+    # Vectorized pileup detection
+    for i in range(len(photons)):
+        # Print a status update every 10% of the way
+        if i % (len(photons) // 10) == 0:
+            print(f"Progress: {i / len(photons) * 100:.0f}%")
+        if is_pileup[i]:
             continue
 
-        x_i, y_i, t_i = photons[i]
-        is_pileup = False
-        cell_i = find_cell(x_i, y_i)
+        # Select photons within the reset time window
+        time_differences = photons[:, 2] - photons[i, 2]
+        temporal_mask = (time_differences > 0) & (time_differences < t_reset)
 
-        for j in range(i + 1, len(photons)):
+        # Select photons in the same spatial cell
+        same_cell_mask = grid_indices == grid_indices[i]
 
-            x_j, y_j, t_j = photons[j]
+        # Combine masks
+        pileup_candidates = temporal_mask & same_cell_mask
+        is_pileup[pileup_candidates] = True
 
-            # If time difference exceeds reset time, break early
-            if t_j - t_i >= t_reset:
-                is_pileup = False
-                break
-
-            # Check if within twice the pitch
-            if abs(x_i - x_j) < pitch and abs(y_i - y_j) < pitch:
-                # Check if within the same spatial cell
-                cell_j = find_cell(x_j, y_j)
-                if cell_i == cell_j:
-                    if np.random.uniform() < pde:
-                        is_pileup = True
-                        pileup.append(photons[j])
-                    skip.append(j)
-
-        if is_pileup:
-            pileup.append(photons[i])
-        else:
-            no_pileup.append(photons[i])
-            i += 1
-            if i == len(photons) - 1:
-                looping = False
+    # Separate pileup and no_pileup photons
+    pileup = photons[is_pileup]
+    no_pileup = photons[~is_pileup]
 
     return photons, pileup, no_pileup
 
@@ -107,33 +69,83 @@ def spatial_dist(size=1000, std_dev_x=1E-3, std_dev_y=1E-3, mean=0):
     x_positions = np.random.normal(mean, std_dev_x, size=size)
     y_positions = np.random.normal(mean, std_dev_y, size=size)
     return x_positions, y_positions
-
+    
 # Example usage
 if __name__ == "__main__":
+    t0 = time.time()
     # Define parameters
-    n_photons = int(1E5)  # Number of photons to simulate
-    t_reset = 5E-8  # s; reset time of the SPAD
-    pitch = 50E-6  # m; Pitch between cells
-    xlim = 5.95E-3  # m; X-axis limit for spatial distribution
-    ylim = 5.85E-3  # m; Y-axis limit for spatial distribution
-    wx = 1E-3  # m; Beam waist in x-direction
-    wy = 1E-3  # m; Beam waist in y-direction
-    pde = 0.3
-    lowrate = 6
-    highrate = 13
-    n_processes = 10  # Number of parallel processes
-
-    # Iterate through different incident rates
+    def setparam():
+        # Define parameters
+        n_photons = int(1E5)  # Number of photons to simulate
+        t_reset = 5E-8  # s; reset time of the SPAD
+        pitch = 50E-6  # m; Pitch between cells
+        xlim = 5.95E-3  # m; X-axis limit for spatial distribution
+        ylim = 5.85E-3  # m; Y-axis limit for spatial distribution
+        wx = 1E-3  # m; Beam waist in x-direction
+        wy = 1E-3  # m; Beam waist in y-direction
+        pde = 0.3 # PDE of the SiPM
+        lowrate = 6 # Logarithm of the lowest incident rate
+        highrate = 14 # Logarithm of the highest incident rate
+        n_processes = 10  # Number of parallel processes
+        measured = [] # Measured rates
+        return n_photons, t_reset, pitch, xlim, ylim, wx, wy, pde, lowrate, highrate, n_processes, measured
+    n_photons, t_reset, pitch, xlim, ylim, wx, wy, pde, lowrate, highrate, n_processes, measured = setparam()
     incident = np.logspace(lowrate, highrate, num=int(highrate - lowrate + 1))
-    measured = []
+    params = {
+        "n_photons": n_photons,
+        "t_reset": t_reset,
+        "pitch": pitch,
+        "xlim": xlim,
+        "ylim": ylim,
+        "wx": wx,
+        "wy": wy,
+        "pde": pde,
+        "lowrate": lowrate,
+        "highrate": highrate,
+        "n_processes": n_processes,
+        "measured": measured
+    }
+
+    # Write simulation results to a CSV file
+    def writeout(filename=None, data=None):
+        """
+        Write simulation results to a CSV file. If a filename is provided, write to that file.
+        Otherwise, write to 'simulation_results.csv'.
+
+        Parameters:
+        filename (str, optional): The name of the file to write to. Defaults to None.
+
+        Returns:
+        None
+        """
+        if filename is None:
+            filename = "simulation_results.csv"
+            with open(filename, mode='w', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+
+                # Write header
+                csvwriter.writerow([f"{key}: {value}" for key, value in params.items()])
+                csvwriter.writerow(["Incident Rate (cps)", "Measured Rate (cps)"])
+            return filename
+        
+        if filename is not None and data is not None:
+            with open(filename, mode='a', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                # Save results to CSV
+                dout = [data[i] for i in range(len(data))]
+                csvwriter.writerow(dout)
+            return filename, dout   
+        
+        return None
+    output_filename = writeout()
 
     for lambda_rate in incident:
         # Print the progress
-        duration = n_photons / lambda_rate  # s; Duration of the simulation
-        if duration < 10 * t_reset:
-            n_photons = int(10 * t_reset * lambda_rate)
-            duration = n_photons / lambda_rate
+        duration = n_photons/lambda_rate  # s; Duration of the simulation
+        while duration < 10*t_reset:
+            n_photons = n_photons * 10
             print(f"Duration ({duration:.2e} s) too short for pileup. Increasing the number of photons to {n_photons}")
+            duration = n_photons/lambda_rate
 
         print(f"Exposure duration: {duration:.2e} s")
         print(f"Photon rate: {lambda_rate:.2e} cps")
@@ -156,14 +168,10 @@ if __name__ == "__main__":
             all_pileup.extend(pileup)
             all_no_pileup.extend(no_pileup)
 
-        # Output results
-        print("\n")
-        print(f"Total photons: {len(all_photons)}")
-        print(f"Pileup avalanches: {len(all_pileup)}")
-        print(f"Measured avalanches: {len(all_no_pileup)}")
-        print(f"Measured rate: {len(all_no_pileup) / duration:.2e} cps")
-
         measured.append(len(all_no_pileup) / duration)
+        output_filename, rates = writeout(output_filename, [lambda_rate, measured[-1]])
+    
+    print(f"\nSimulation time: {time.time() - t0:.2f} s")
 
     # Plot the results
     figure, axis = plt.subplots()
@@ -173,6 +181,7 @@ if __name__ == "__main__":
     axis.set_xlabel('Incident Rate (cps)')
     axis.set_ylabel('Measured Rate (cps)')
     plt.show()
+    
 
-    print(incident)
-    print(measured)
+
+
